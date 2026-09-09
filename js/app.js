@@ -271,7 +271,7 @@ class CampusAppController {
   }
 
   // Calculate & Draw Current Route
-  calculateCurrentRoute() {
+  async calculateCurrentRoute() {
     const originSel = document.getElementById('origin-select');
     const destSel = document.getElementById('dest-select');
 
@@ -285,7 +285,7 @@ class CampusAppController {
       return;
     }
 
-    const route = this.mapEngine.calculateRoute(this.selectedOriginId, this.selectedDestId);
+    const route = await this.mapEngine.calculateRoute(this.selectedOriginId, this.selectedDestId);
     if (!route) {
       alert('Could not find a direct path between these two points.');
       return;
@@ -385,25 +385,25 @@ class CampusAppController {
   }
 
   // Quick Action: Set Destination and Route immediately
-  setDestinationAndRoute(destLandmarkId) {
+  async setDestinationAndRoute(destLandmarkId) {
     this.selectedDestId = destLandmarkId;
     const destSel = document.getElementById('dest-select');
     if (destSel) destSel.value = destLandmarkId;
 
     this.switchTab('directions');
-    this.calculateCurrentRoute();
+    await this.calculateCurrentRoute();
     this.mapEngine.focusLandmark(destLandmarkId, false);
   }
 
   // Quick Action: Set Origin
-  setOrigin(originLandmarkId) {
+  async setOrigin(originLandmarkId) {
     this.selectedOriginId = originLandmarkId;
     const originSel = document.getElementById('origin-select');
     if (originSel) originSel.value = originLandmarkId;
-    this.calculateCurrentRoute();
+    await this.calculateCurrentRoute();
   }
 
-  setCustomRoute(originId, destId) {
+  async setCustomRoute(originId, destId) {
     this.selectedOriginId = originId;
     this.selectedDestId = destId;
 
@@ -413,10 +413,10 @@ class CampusAppController {
     if (destSel) destSel.value = destId;
 
     this.switchTab('directions');
-    this.calculateCurrentRoute();
+    await this.calculateCurrentRoute();
   }
 
-  swapOriginDestination() {
+  async swapOriginDestination() {
     const originSel = document.getElementById('origin-select');
     const destSel = document.getElementById('dest-select');
     if (!originSel || !destSel) return;
@@ -425,7 +425,7 @@ class CampusAppController {
     originSel.value = destSel.value;
     destSel.value = temp;
 
-    this.calculateCurrentRoute();
+    await this.calculateCurrentRoute();
   }
 
   focusLandmark(landmarkId) {

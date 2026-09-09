@@ -418,32 +418,71 @@ class CampusMapEngine {
     return directions[idx];
   }
 
-  // Calculate route between two landmarks or coordinates
-  calculateRoute(originId, destId) {
-    const originNodeKey = CUSAT_DATA.landmarkToNode[originId];
-    const destNodeKey = CUSAT_DATA.landmarkToNode[destId];
+  // Calculate route between two landmarks or coordinates using real OpenStreetMap roads
+  async calculateRoute(originId, destId) {
+    const originLandmark = CUSAT_DATA.landmarks.find(l => l.id === originId);
+    const destLandmark = CUSAT_DATA.landmarks.find(l => l.id === destId);
 
-    if (!originNodeKey || !destNodeKey) return null;
+    if (!originLandmark || !destLandmark) return null;
+
+    const [startLat, startLng] = originLandmark.coords;
+    const [endLat, endLng] = destLandmark.coords;
+
+    const profile = this.navigationMode === 'drive' ? 'driving' : (this.navigationMode === 'cycle' ? 'bike' : 'foot');
+
+    // 1. Try real OpenStreetMap road router (OSRM)
+    try {
+      const osrmUrl = `https://router.project-osrm.org/route/v1/${profile}/${startLng},${startLat};${endLng},${endLat}?overview=full&geometries=geojson&steps=true`;
+      const response = await fetch(osrmUrl, { cache: 'force-cache' });
+      if (response.ok) {
+        const data = await response.json();
+        if (data.code === 'Ok' && data.routes && data.routes.length > 0) {
+          const routeData = data.routes[0];
+          // Convert [lng, lat] to [lat, lng]
+          const roadCoordinates = routeData.geometry.coordinates.map(c => [c[1], c[0]]);
+          const totalMeters = Math.round(routeData.distance);
+          
+          const speedFactors = { walk: 1.3, cycle: 3.8, drive: 6.5 };
+          const durationSeconds = Math.max(30, Math.round(totalMeters / (speedFactors[this.navigationMode] || 1.3)));
+          const durationMinutes = Math.max(1, Math.round(durationSeconds / 60));
+          const stepCount = Math.round(totalMeters / 0.75);
+
+          const maneuvers = this.generateManeuversFromOSRM(routeData.legs[0].steps, originLandmark, destLandmark, roadCoordinates);
+
+          this.activeRoute = {
+            originId,
+            destId,
+            originLandmark,
+            destLandmark,
+            coordinates: roadCoordinates,
+            totalMeters,
+            durationMinutes,
+            durationSeconds,
+            stepCount,
+            maneuvers
+          };
+
+          this.drawRouteOnMap(this.activeRoute);
+          return this.activeRoute;
+        }
+      }
+    } catch (err) {
+      console.warn('OSRM router fetch skipped, using local campus graph:', err);
+    }
+
+    // 2. Fallback to built-in Dijkstra Campus Graph
+    const originNodeKey = CUSAT_DATA.landmarkToNode[originId] || 'p_main_gate';
+    const destNodeKey = CUSAT_DATA.landmarkToNode[destId] || 'p_library_front';
 
     const pathResult = this.findShortestPath(originNodeKey, destNodeKey);
     if (!pathResult) return null;
 
-    const originLandmark = CUSAT_DATA.landmarks.find(l => l.id === originId);
-    const destLandmark = CUSAT_DATA.landmarks.find(l => l.id === destId);
-
     const maneuvers = this.generateManeuvers(pathResult, originLandmark, destLandmark);
-
-    // Speed calculation
-    const speeds = {
-      walk: 4.8 / 3.6, // ~1.33 m/s (~5 km/h)
-      cycle: 15 / 3.6, // ~4.16 m/s (~15 km/h)
-      drive: 25 / 3.6  // ~6.94 m/s (~25 km/h)
-    };
-
-    const currentSpeed = speeds[this.navigationMode] || speeds.walk;
+    const speedFactors = { walk: 1.33, cycle: 4.16, drive: 6.94 };
+    const currentSpeed = speedFactors[this.navigationMode] || 1.33;
     const durationSeconds = Math.round(pathResult.totalMeters / currentSpeed);
     const durationMinutes = Math.max(1, Math.round(durationSeconds / 60));
-    const stepCount = Math.round(pathResult.totalMeters / 0.75); // ~0.75m per step
+    const stepCount = Math.round(pathResult.totalMeters / 0.75);
 
     this.activeRoute = {
       originId,
@@ -460,6 +499,60 @@ class CampusMapEngine {
 
     this.drawRouteOnMap(this.activeRoute);
     return this.activeRoute;
+  }
+
+  // Parse OSRM steps into user-friendly Google Maps style maneuvers
+  generateManeuversFromOSRM(osrmSteps, originLandmark, destLandmark, roadCoordinates) {
+    if (!osrmSteps || osrmSteps.length === 0) {
+      return this.generateManeuvers({ coordinates: roadCoordinates, streetSegments: [] }, originLandmark, destLandmark);
+    }
+
+    const steps = [];
+    osrmSteps.forEach((s, idx) => {
+      const type = s.maneuver.type;
+      const modifier = s.maneuver.modifier || '';
+      const streetName = s.name || (idx === 0 ? 'University Road' : 'Campus Street');
+      const dist = Math.round(s.distance);
+      const loc = [s.maneuver.location[1], s.maneuver.location[0]];
+
+      let icon = 'arrow-up';
+      let instruction = `Continue on ${streetName}`;
+
+      if (type === 'depart') {
+        icon = 'arrow-up';
+        instruction = `Head ${modifier || 'forward'} on ${streetName}`;
+      } else if (type === 'arrive') {
+        icon = 'map-pin';
+        instruction = `Arrive at ${destLandmark.name}`;
+      } else if (type === 'turn') {
+        if (modifier.includes('right')) {
+          icon = modifier.includes('slight') ? 'arrow-up-right' : 'corner-up-right';
+          instruction = `Turn ${modifier} onto ${streetName}`;
+        } else if (modifier.includes('left')) {
+          icon = modifier.includes('slight') ? 'arrow-up-left' : 'corner-up-left';
+          instruction = `Turn ${modifier} onto ${streetName}`;
+        } else {
+          instruction = `Turn onto ${streetName}`;
+        }
+      } else if (type === 'fork') {
+        icon = modifier.includes('right') ? 'arrow-up-right' : 'arrow-up-left';
+        instruction = `Take the ${modifier || ''} fork onto ${streetName}`;
+      } else if (type === 'roundabout') {
+        icon = 'rotate-cw';
+        instruction = `Enter roundabout and take exit onto ${streetName}`;
+      }
+
+      steps.push({
+        type: type + (modifier ? '-' + modifier : ''),
+        icon,
+        instruction,
+        street: streetName,
+        distance: dist,
+        coords: loc
+      });
+    });
+
+    return steps;
   }
 
   // Draw Route Polyline on Leaflet Map
