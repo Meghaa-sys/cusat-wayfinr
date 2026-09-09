@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>CUSAT Wayfinder Pro | Cochin University Interactive Map, Live Navigation & AI Assistant</title>
+  
+  <!-- Primary Meta Tags -->
+  <meta name="title" content="CUSAT Wayfinder Pro | Cochin University Interactive Map & AI Navigation">
+  <meta name="description" content="State-of-the-art interactive map and Google Maps-style live turn-by-turn navigation for Cochin University of Science and Technology (CUSAT) with an intelligent AI campus chatbot.">
+  <meta name="theme-color" content="#090d16">
+
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+  <!-- App Custom Stylesheet -->
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+  <div id="app">
+
+    <!-- Top Live Simulation Navigation HUD (Google Maps Style) -->
+    <div id="live-sim-banner" class="live-sim-banner">
+      <div class="hud-turn-icon-wrapper" id="sim-hud-icon">
+        <i data-lucide="arrow-up"></i>
+      </div>
+      <div class="hud-instructions-box">
+        <div class="hud-main-inst" id="sim-current-instruction">Head North on University Main Avenue</div>
+        <div class="hud-sub-inst" id="sim-current-street">Campus Central Walkway</div>
+      </div>
+      <div class="hud-metrics-box">
+        <div class="hud-metric-eta" id="sim-eta-remain">3 min</div>
+        <div class="hud-metric-dist" id="sim-dist-remain">240 m</div>
+      </div>
+      <button class="icon-btn" onclick="CampusApp.stopLiveNavigation()" title="Exit Navigation" style="background:rgba(244,63,94,0.2); color:#f43f5e; border-color:#f43f5e;">
+        <i data-lucide="x"></i>
+      </button>
+    </div>
+
+    <!-- Floating Top-Right Controls -->
+    <div class="map-floating-controls">
+      <!-- Tile Layer Switcher -->
+      <div class="layer-switcher-pill">
+        <button class="layer-btn active" data-layer="osm" title="OpenStreetMap Campus View">Streets</button>
+        <button class="layer-btn" data-layer="hot" title="Detailed Humanitarian Map">Walkways</button>
+        <button class="layer-btn" data-layer="satellite" title="Satellite Imagery">Satellite</button>
+        <button class="layer-btn" data-layer="dark" title="Dark Canvas">Dark</button>
+      </div>
+
+      <!-- Quick Action Floating Buttons -->
+      <div style="display:flex; gap:6px; justify-content:flex-end;">
+        <button class="icon-btn" id="btn-gps-locate" onclick="CampusApp.toggleLiveGps()" title="Locate Me (Live GPS)">
+          <i data-lucide="crosshair"></i>
+        </button>
+        <button class="icon-btn" id="btn-voice-toggle" title="Toggle Voice Guidance">
+          <i data-lucide="volume-2"></i>
+        </button>
+        <button class="icon-btn" onclick="document.getElementById('sos-modal').classList.add('active')" title="Emergency SOS" style="color:#f43f5e;">
+          <i data-lucide="shield-alert"></i>
+        </button>
+        <button class="icon-btn" onclick="document.getElementById('settings-modal').classList.add('active')" title="Settings & API Key">
+          <i data-lucide="settings"></i>
+        </button>
+      </div>
+    </div>
+
+    <!-- Main Full-Bleed Map Viewport -->
+    <main id="map-container"></main>
+
+    <!-- Glassmorphism Floating Sidebar Drawer -->
+    <aside id="sidebar-drawer" class="sidebar-drawer">
+      
+      <!-- Mobile Pull Bar Handle -->
+      <div class="mobile-drag-handle" onclick="document.getElementById('sidebar-drawer').classList.toggle('mobile-open')"></div>
+
+      <!-- Sidebar Header -->
+      <header class="sidebar-header">
+        <div class="brand-wrapper">
+          <div class="brand-logo">
+            <i data-lucide="compass" style="width:24px; height:24px;"></i>
+          </div>
+          <div class="brand-text">
+            <h1>CUSAT <span>Wayfinder</span></h1>
+            <p>Kalamassery, Kochi • Live Campus Hub</p>
+          </div>
+        </div>
+
+        <div class="header-tools">
+          <button class="icon-btn" id="theme-toggle-btn" onclick="toggleAppTheme()" title="Toggle Dark/Light Mode">
+            <i data-lucide="sun-moon"></i>
+          </button>
+        </div>
+      </header>
+
+      <!-- Navigation Tab Bar -->
+      <nav class="nav-tab-bar">
+        <button class="nav-tab-btn active" data-tab="explore" onclick="CampusApp.switchTab('explore')">
+          <i data-lucide="compass"></i>
+          <span>Explore</span>
+        </button>
+        <button class="nav-tab-btn" data-tab="directions" onclick="CampusApp.switchTab('directions')">
+          <i data-lucide="navigation"></i>
+          <span>Routes</span>
+        </button>
+        <button class="nav-tab-btn" data-tab="ai-chat" onclick="CampusApp.switchTab('ai-chat')">
+          <i data-lucide="sparkles"></i>
+          <span>AI Pro</span>
+        </button>
+        <button class="nav-tab-btn" data-tab="status" onclick="CampusApp.switchTab('status')">
+          <i data-lucide="activity"></i>
+          <span>Status</span>
+        </button>
+      </nav>
+
+      <!-- Content Tab Panels -->
+      <div class="tab-content-container">
+
+        <!-- 1. EXPLORE PANEL -->
+        <section id="tab-panel-explore" class="tab-panel active">
+          
+          <!-- Search Box -->
+          <div class="search-wrapper">
+            <div class="search-input-box">
+              <i data-lucide="search"></i>
+              <input type="text" id="search-input" placeholder="Search SOE, Library, Canteen, Hostels..." autocomplete="off">
+            </div>
+            <div id="search-results" class="search-results-dropdown"></div>
+          </div>
+
+          <!-- Category Filter Chips -->
+          <div id="category-chips" class="category-chips-scroll"></div>
+
+          <!-- Landmark Cards List -->
+          <div id="landmarks-list" class="landmarks-list-scroll"></div>
+        </section>
+
+
+        <!-- 2. DIRECTIONS & NAVIGATION PANEL -->
+        <section id="tab-panel-directions" class="tab-panel">
+          
+          <!-- Origin / Destination Selectors -->
+          <div class="route-selector-box">
+            <div class="route-picker-row">
+              <div class="route-point-indicator origin-dot"></div>
+              <select id="origin-select" class="route-select-input" onchange="CampusApp.calculateCurrentRoute()"></select>
+            </div>
+
+            <button class="btn-swap-points" onclick="CampusApp.swapOriginDestination()" title="Swap origin and destination">
+              <i data-lucide="arrow-up-down" style="width:16px; height:16px;"></i>
+            </button>
+
+            <div class="route-picker-row">
+              <div class="route-point-indicator dest-dot"></div>
+              <select id="dest-select" class="route-select-input" onchange="CampusApp.calculateCurrentRoute()"></select>
+            </div>
+          </div>
+
+          <!-- Travel Modes Bar -->
+          <div class="travel-modes-bar">
+            <button class="travel-mode-btn active" data-mode="walk">
+              <i data-lucide="footprints"></i> <span>Walk</span>
+            </button>
+            <button class="travel-mode-btn" data-mode="cycle">
+              <i data-lucide="bike"></i> <span>Cycle</span>
+            </button>
+            <button class="travel-mode-btn" data-mode="drive">
+              <i data-lucide="car"></i> <span>Vehicle</span>
+            </button>
+          </div>
+
+          <!-- Route Summary Card -->
+          <div id="route-summary-panel" class="route-summary-card">
+            <div class="summary-headline">
+              <div>
+                <div style="font-size:0.75rem; color:var(--text-muted);">Route to Destination</div>
+                <div style="font-size:0.95rem; font-weight:700;" id="hud-dest-name">Central Library</div>
+              </div>
+              <div class="eta-badge" id="hud-eta">3 min</div>
+            </div>
+
+            <div class="summary-stats-row">
+              <span><i data-lucide="milestone"></i> <b id="hud-distance">350 m</b></span>
+              <span><i data-lucide="footprints"></i> <b id="hud-steps-count">470 steps</b></span>
+              <span><i data-lucide="corner-down-right"></i> <b id="hud-origin-name">Main Gate</b></span>
+            </div>
+
+            <div class="nav-cta-buttons">
+              <button class="btn-start-nav" id="btn-sim-play" onclick="CampusApp.startLiveNavigationSimulation()">
+                <i data-lucide="play"></i> Start Live Simulation
+              </button>
+              <button class="btn-stop-nav" onclick="CampusApp.stopLiveNavigation()">
+                Reset
+              </button>
+            </div>
+          </div>
+
+          <!-- Step-by-Step Directions List -->
+          <h4 style="font-size:0.82rem; font-weight:700; text-transform:uppercase; letter-spacing:0.05em; color:var(--text-dim); margin-bottom:10px;">
+            Turn-by-Turn Steps
+          </h4>
+          <div id="turn-by-turn-steps" class="turn-steps-list"></div>
+        </section>
+
+
+        <!-- 3. AI CHATBOT PANEL -->
+        <section id="tab-panel-ai-chat" class="tab-panel">
+          <div class="chat-tab-wrapper">
+            
+            <!-- Message Feed -->
+            <div id="chat-messages" class="chat-messages-container"></div>
+
+            <!-- Suggestion Prompt Chips -->
+            <div class="quick-ai-prompts">
+              <button class="ai-prompt-chip" data-prompt="Take me to School of Engineering (SOE)">🏫 Route to SOE</button>
+              <button class="ai-prompt-chip" data-prompt="Where is the nearest canteen and food?">🍽️ Nearest Food</button>
+              <button class="ai-prompt-chip" data-prompt="What are the library timings and facilities?">📚 Library Timings</button>
+              <button class="ai-prompt-chip" data-prompt="How do I reach CUSAT from the Metro Station?">🚇 Metro Connectivity</button>
+              <button class="ai-prompt-chip" data-prompt="Where are the boys and girls hostels?">🛏️ Hostels</button>
+            </div>
+
+            <!-- Input Bar -->
+            <div class="chat-input-bar">
+              <button class="btn-mic" id="btn-chat-mic" title="Voice Input (Speech-to-Text)">
+                <i data-lucide="mic"></i>
+              </button>
+              <input type="text" id="chat-input" placeholder="Ask anything about CUSAT campus..." onkeydown="if(event.key==='Enter') CampusApp.aiChatbot.handleUserSubmit(this.value)">
+              <button class="btn-send" onclick="CampusApp.aiChatbot.handleUserSubmit(document.getElementById('chat-input').value)" title="Send message">
+                <i data-lucide="send"></i>
+              </button>
+            </div>
+          </div>
+        </section>
+
+
+        <!-- 4. CAMPUS STATUS & UTILITIES PANEL -->
+        <section id="tab-panel-status" class="tab-panel">
+          <div class="status-panel-wrapper">
+            
+            <!-- Live Kalamassery Weather Widget -->
+            <div class="weather-widget-card">
+              <div class="weather-left">
+                <div class="weather-icon-box">⛅</div>
+                <div>
+                  <div class="weather-temp" id="weather-temp">29°C</div>
+                  <div class="weather-cond" id="weather-condition">Kalamassery, Kochi • Humid</div>
+                </div>
+              </div>
+              <div style="text-align:right; font-size:0.75rem; color:var(--text-muted);">
+                <div>Humidity: 78%</div>
+                <div>Air: Good (AQI 42)</div>
+              </div>
+            </div>
+
+            <!-- Live Occupancy List -->
+            <h4 style="font-size:0.82rem; font-weight:700; text-transform:uppercase; letter-spacing:0.05em; color:var(--text-dim); margin-top:6px;">
+              Live Facility Occupancy
+            </h4>
+            <div id="live-status-list" style="display:flex; flex-direction:column; gap:8px;"></div>
+
+            <!-- Emergency Quick Button -->
+            <button class="emergency-btn-banner" onclick="document.getElementById('sos-modal').classList.add('active')">
+              <i data-lucide="phone-call"></i> Campus Emergency Directory
+            </button>
+          </div>
+        </section>
+
+      </div>
+    </aside>
+
+    <!-- Emergency Contacts SOS Modal -->
+    <div id="sos-modal" class="app-modal">
+      <div class="modal-card">
+        <div class="modal-header">
+          <h3 style="color:#f43f5e; display:flex; align-items:center; gap:8px;">
+            <i data-lucide="shield-alert"></i> CUSAT Emergency Contacts
+          </h3>
+          <button class="icon-btn" onclick="document.getElementById('sos-modal').classList.remove('active')">
+            <i data-lucide="x"></i>
+          </button>
+        </div>
+        <div class="modal-body">
+          <div class="modal-contact-row">
+            <span class="modal-contact-label">🏥 University Health Centre</span>
+            <a href="tel:+914842575496" class="modal-contact-num">+91 484 2575496</a>
+          </div>
+          <div class="modal-contact-row">
+            <span class="modal-contact-label">🚨 Campus Main Security</span>
+            <a href="tel:+914842577550" class="modal-contact-num">+91 484 2577550</a>
+          </div>
+          <div class="modal-contact-row">
+            <span class="modal-contact-label">🛡️ Women's Safety Helpline</span>
+            <a href="tel:1091" class="modal-contact-num">1091 / +91 484 2575914</a>
+          </div>
+          <div class="modal-contact-row">
+            <span class="modal-contact-label">🚑 24x7 Ambulance Service</span>
+            <a href="tel:+919447412345" class="modal-contact-num">+91 94474 12345</a>
+          </div>
+          <div class="modal-contact-row">
+            <span class="modal-contact-label">👮 Kalamassery Police Station</span>
+            <a href="tel:+914842541244" class="modal-contact-num">+91 484 2541244</a>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Settings & Gemini API Modal -->
+    <div id="settings-modal" class="app-modal">
+      <div class="modal-card">
+        <div class="modal-header">
+          <h3 style="display:flex; align-items:center; gap:8px;">
+            <i data-lucide="cpu"></i> AI & Navigation Settings
+          </h3>
+          <button class="icon-btn" onclick="document.getElementById('settings-modal').classList.remove('active')">
+            <i data-lucide="x"></i>
+          </button>
+        </div>
+        <div class="modal-body">
+          <p style="font-size:0.8rem; color:var(--text-muted); margin-bottom:12px; line-height:1.4;">
+            CUSAT Wayfinder includes a comprehensive <strong>Offline Campus Knowledge Engine</strong> that works with zero setup. You can optionally enter a Google Gemini API key to enable open-ended cloud LLM responses.
+          </p>
+
+          <label style="display:block; font-size:0.75rem; font-weight:700; margin-bottom:6px; color:var(--text-main);">
+            Gemini API Key (Optional)
+          </label>
+          <input type="password" id="gemini-key-input" placeholder="AIzaSy..." style="width:100%; padding:10px 12px; background:rgba(0,0,0,0.3); border:1px solid var(--border-glass); border-radius:var(--radius-sm); color:#fff; font-family:var(--font-mono); font-size:0.82rem; margin-bottom:14px; outline:none;">
+
+          <button class="btn-start-nav" style="width:100%;" onclick="saveApiKeySetting()">
+            Save Configuration
+          </button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- External Libraries -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js"></script>
+
+  <!-- Application Modules -->
+  <script src="js/campus-data.js"></script>
+  <script src="js/map-engine.js"></script>
+  <script src="js/ai-chatbot.js"></script>
+  <script src="js/app.js"></script>
+
+  <script>
+    // Theme toggle helper
+    function toggleAppTheme() {
+      const html = document.documentElement;
+      const current = html.getAttribute('data-theme') || 'dark';
+      const next = current === 'dark' ? 'light' : 'dark';
+      html.setAttribute('data-theme', next);
+    }
+
+    // Save API key
+    function saveApiKeySetting() {
+      const key = document.getElementById('gemini-key-input').value.trim();
+      if (window.CampusApp && window.CampusApp.aiChatbot) {
+        window.CampusApp.aiChatbot.setApiKey(key);
+      }
+      document.getElementById('settings-modal').classList.remove('active');
+      alert(key ? 'Gemini API Key saved successfully!' : 'Defaulting to Built-in High Performance Campus Engine.');
+    }
+
+    // Prefill API key input
+    document.addEventListener('DOMContentLoaded', () => {
+      const savedKey = localStorage.getItem('cusat_gemini_api_key') || '';
+      const input = document.getElementById('gemini-key-input');
+      if (input && savedKey) input.value = savedKey;
+    });
+  </script>
+</body>
+</html>
