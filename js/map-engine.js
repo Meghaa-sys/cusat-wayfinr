@@ -94,7 +94,8 @@ class CampusMapEngine {
       attributionControl: false
     });
 
-    // 100% Free Public Tile Layers (No API Key Required)
+    // Public & Authenticated Tile Layers
+    const apiKey = (window.CAMPUS_CONFIG && window.CAMPUS_CONFIG.apiKey) || '';
     this.tileLayers = {
       osm: L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         maxZoom: 19,
@@ -108,9 +109,15 @@ class CampusMapEngine {
         maxZoom: 19,
         attribution: 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
       }),
-      dark: L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}', {
-        maxZoom: 16,
-        attribution: 'Tiles &copy; Esri &mdash; Esri, DeLorme, NAVTEQ'
+      dark: L.tileLayer(`https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png?api_key=${apiKey}`, {
+        subdomains: 'abcd',
+        maxZoom: 19,
+        attribution: '&copy; CartoDB'
+      }),
+      voyager: L.tileLayer(`https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png?api_key=${apiKey}`, {
+        subdomains: 'abcd',
+        maxZoom: 19,
+        attribution: '&copy; CartoDB'
       }),
       esriStreet: L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', {
         maxZoom: 19,
@@ -118,7 +125,7 @@ class CampusMapEngine {
       })
     };
 
-    // Default to OpenStreetMap (clean, detailed campus buildings and paths)
+    // Default to OpenStreetMap
     this.currentTileKey = 'osm';
     this.tileLayers[this.currentTileKey].addTo(this.map);
 

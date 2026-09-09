@@ -3,6 +3,10 @@ node_modules/
 .env
 .env.local
 
+# API Secrets & Local Config
+js/config.js
+config.js
+
 # OS Files
 .DS_Store
 Thumbs.db

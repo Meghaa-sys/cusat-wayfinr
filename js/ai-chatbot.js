@@ -8,7 +8,7 @@ class CampusAIChatbot {
     this.containerId = options.containerId || 'chat-messages';
     this.inputFieldId = options.inputFieldId || 'chat-input';
     this.mapEngine = options.mapEngine || null;
-    this.geminiApiKey = localStorage.getItem('cusat_gemini_api_key') || '';
+    this.geminiApiKey = (window.CAMPUS_CONFIG && window.CAMPUS_CONFIG.apiKey) || localStorage.getItem('cusat_gemini_api_key') || '';
     this.isListening = false;
     this.recognition = null;
     this.isTyping = false;
